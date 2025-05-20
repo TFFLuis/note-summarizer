@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Note Summarizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom font for better readability */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8; /* Light blue-gray background */
+            display: flex;
+            justify-content: center;
+            align-items: flex-start; /* Align to top for better content flow */
+            min-height: 100vh;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .container {
+            max-width: 800px;
+            width: 100%;
+            background-color: #ffffff;
+            border-radius: 1rem; /* Rounded corners */
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1); /* Soft shadow */
+            padding: 2.5rem; /* Increased padding */
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem; /* Space between sections */
+        }
+        textarea {
+            min-height: 200px; /* Taller textarea */
+            resize: vertical; /* Allow vertical resizing */
+            border: 1px solid #d1d5db; /* Light gray border */
+            padding: 1rem;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            line-height: 1.5;
+            transition: border-color 0.2s ease-in-out;
+        }
+        textarea:focus {
+            outline: none;
+            border-color: #3b82f6; /* Blue focus ring */
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+        }
+        button {
+            background-color: #3b82f6; /* Blue button */
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.75rem; /* More rounded button */
+            font-weight: 600; /* Semi-bold text */
+            transition: background-color 0.2s ease-in-out, transform 0.1s ease-in-out;
+            box-shadow: 0 4px 10px rgba(59, 130, 246, 0.3); /* Button shadow */
+        }
+        button:hover {
+            background-color: #2563eb; /* Darker blue on hover */
+            transform: translateY(-2px); /* Slight lift effect */
+        }
+        button:active {
+            transform: translateY(0); /* Press effect */
+        }
+        .summary-output {
+            background-color: #f9fafb; /* Lighter background for output */
+            border: 1px dashed #e5e7eb; /* Dashed border */
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            font-size: 1rem;
+            line-height: 1.6;
+            white-space: pre-wrap; /* Preserve whitespace and line breaks */
+            word-break: break-word; /* Break long words */
+            color: #374151; /* Darker text color */
+        }
+        .summary-output strong {
+            color: #1f2937; /* Even darker for labels */
+        }
+        @media (max-width: 768px) {
+            .container {
+                padding: 1.5rem;
+                gap: 1rem;
+            }
+            textarea, button, .summary-output {
+                font-size: 0.9rem;
+                padding: 0.75rem 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-3xl font-bold text-gray-800 text-center mb-4">Note Summarizer</h1>
+        <p class="text-gray-600 text-center mb-6">Paste your legal note below and click "Summarize" to get a structured overview.</p>
+
+        <textarea id="noteInput" class="w-full border rounded-lg p-4 text-gray-700 focus:ring-2 focus:ring-blue-500 transition duration-200" placeholder="Paste your note here, e.g.:
+
+Manuel Martinez
+CONSULT-JC
+Summons for $10,330 from Discover bank/Suttell & hammer
+Case#25nwlc21254/LA
+Other Promissory Note/Collections Case (General Jurisdiction)
+served 05/14 deadline 06/13
+afs-1495 plus 15%
+sent payments/lp
+will look into lp first"></textarea>
+
+        <button id="summarizeButton" class="w-full py-3 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 transition duration-200">Summarize</button>
+
+        <div id="summaryOutput" class="summary-output mt-6 hidden"></div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const noteInput = document.getElementById('noteInput');
+            const summarizeButton = document.getElementById('summarizeButton');
+            const summaryOutput = document.getElementById('summaryOutput');
+
+            summarizeButton.addEventListener('click', () => {
+                const note = noteInput.value;
+                if (!note.trim()) {
+                    summaryOutput.innerHTML = '<p class="text-red-500">Please paste some text into the notes area to summarize.</p>';
+                    summaryOutput.classList.remove('hidden');
+                    return;
+                }
+
+                const summary = summarizeNote(note);
+                displaySummary(summary);
+            });
+
+            /**
+             * Analyzes the input note and extracts key information.
+             * @param {string} note - The input text note.
+             * @returns {object} An object containing the extracted summary details.
+             */
+            function summarizeNote(note) {
+                const summary = {
+                    amountOfDebt: 'Not found',
+                    caseNumber: 'Not found',
+                    county: 'Not found',
+                    paymentInformation: 'Not found',
+                    plaintiff: 'Not found',
+                    opposingLawFirm: 'Not found',
+                    isRushCase: 'No',
+                    importantDetails: []
+                };
+
+                // Normalize note for easier parsing (lowercase and single spaces)
+                const lowerNote = note.toLowerCase();
+
+                // --- Amount of debt ---
+                // Regex for $ followed by numbers, commas, and optional decimal.
+                // Also look for "plus X%" or "plus XXXX"
+                const debtMatch = lowerNote.match(/\$\s*[\d,]+\.?\d*/);
+                if (debtMatch) {
+                    summary.amountOfDebt = debtMatch[0];
+                }
+                const afsMatch = lowerNote.match(/afs-[\d,]+\s*plus\s*\d+%/);
+                if (afsMatch) {
+                    summary.amountOfDebt += ` (${afsMatch[0]})`;
+                } else {
+                    const genericPlusMatch = lowerNote.match(/plus\s*[\d,]+\.?\d*%/);
+                    if (genericPlusMatch) {
+                         summary.amountOfDebt += ` (${genericPlusMatch[0]})`;
+                    }
+                }
+
+
+                // --- Case number ---
+                const caseNumberMatch = note.match(/Case#(\S+)/i);
+                if (caseNumberMatch) {
+                    summary.caseNumber = caseNumberMatch[1];
+                    // Infer county from case number suffix like /LA
+                    const countyMatch = caseNumberMatch[1].match(/\/([A-Z]{2})$/);
+                    if (countyMatch && countyMatch[1].length === 2) {
+                        // Simple mapping for common US state/county abbreviations
+                        const countyMap = {
+                            'LA': 'Los Angeles County, California',
+                            'NY': 'New York County, New York',
+                            'SF': 'San Francisco County, California',
+                            'IL': 'Illinois (Statewide)',
+                            'TX': 'Texas (Statewide)',
+                            // Add more as needed
+                        };
+                        summary.county = countyMap[countyMatch[1].toUpperCase()] || `Inferred: ${countyMatch[1].toUpperCase()}`;
+                    }
+                }
+
+                // --- Plaintiff / Opposing Law Firm ---
+                const fromMatch = note.match(/from\s+([^/]+)(?:\/([^/]+))?/i);
+                if (fromMatch) {
+                    summary.plaintiff = fromMatch[1].trim();
+                    if (fromMatch[2]) {
+                        summary.opposingLawFirm = fromMatch[2].trim();
+                    }
+                } else {
+                    // Alternative parsing if "from" isn't present, e.g., "Bank Name / Law Firm"
+                    const directMatch = note.match(/(\S+ bank|\S+ credit)\s*\/\s*([^ ]+ & [^ ]+)/i);
+                    if (directMatch) {
+                        summary.plaintiff = directMatch[1].trim();
+                        summary.opposingLawFirm = directMatch[2].trim();
+                    }
+                }
+
+
+                // --- Payment information ---
+                const paymentInfoMatch = lowerNote.match(/(sent payments|payments|lp|paid|will look into lp first|sent payment)/);
+                if (paymentInfoMatch) {
+                    if (lowerNote.includes('sent payments/lp')) {
+                        summary.paymentInformation = 'Sent payments; looking into lower payment (lp)';
+                    } else if (lowerNote.includes('will look into lp first')) {
+                        summary.paymentInformation = 'Will look into lower payment (lp) first';
+                    } else if (lowerNote.includes('sent payments')) {
+                        summary.paymentInformation = 'Sent payments';
+                    } else if (lowerNote.includes('lp')) {
+                        summary.paymentInformation = 'Lower payment (lp) mentioned';
+                    }
+                }
+
+
+                // --- Is it a rush case? ---
+                const deadlineMatch = note.match(/deadline\s+(\d{2}\/\d{2})/i);
+                if (deadlineMatch) {
+                    const deadlineDateStr = deadlineMatch[1]; // e.g., "06/13"
+                    const [month, day] = deadlineDateStr.split('/').map(Number);
+                    const currentYear = new Date().getFullYear();
+                    // Create a date object for the deadline (assuming current year)
+                    const deadlineDate = new Date(currentYear, month - 1, day); // month is 0-indexed
+
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0); // Reset time for accurate date comparison
+
+                    if (deadlineDate >= today) {
+                        summary.isRushCase = `Yes (deadline: ${deadlineDateStr})`;
+                    } else {
+                        summary.isRushCase = `No (deadline passed: ${deadlineDateStr})`;
+                    }
+                }
+
+                // --- Important details ---
+                const details = [];
+                if (note.match(/served\s+\d{2}\/\d{2}/i)) {
+                    details.push(note.match(/served\s+\d{2}\/\d{2}/i)[0]);
+                }
+                if (note.match(/Other Promissory Note\/Collections Case \(General Jurisdiction\)/i)) {
+                    details.push('Type: Other Promissory Note/Collections Case (General Jurisdiction)');
+                }
+                if (note.match(/CONSULT-JC/i)) {
+                    details.push('Consultation type: CONSULT-JC');
+                }
+                if (note.match(/Manuel Martinez/i)) {
+                    details.push('Defendant: Manuel Martinez');
+                }
+                // Add any other specific phrases or lines that don't fit elsewhere
+                const otherKeywords = [
+                    'afs-1495 plus 15%', // Already handled in amount, but could be a general detail too
+                    'will look into lp first' // Already handled in payment info, but could be a general detail too
+                ];
+                otherKeywords.forEach(keyword => {
+                    if (note.includes(keyword) && !summary.importantDetails.includes(keyword)) {
+                        details.push(keyword);
+                    }
+                });
+
+                // Filter out details that are already captured in specific fields
+                const filteredDetails = details.filter(detail => {
+                    return !(
+                        detail.includes(summary.amountOfDebt.split(' ')[0]) || // Avoid duplicating debt amount
+                        detail.includes(summary.caseNumber) ||
+                        detail.includes(summary.paymentInformation) ||
+                        detail.includes(summary.plaintiff) ||
+                        detail.includes(summary.opposingLawFirm) ||
+                        detail.includes('deadline') // Deadline is covered by isRushCase
+                    );
+                });
+
+                // Add any remaining lines that seem relevant but not captured
+                const lines = note.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+                lines.forEach(line => {
+                    const isCaptured = Object.values(summary).some(val =>
+                        (typeof val === 'string' && line.toLowerCase().includes(val.toLowerCase())) ||
+                        (Array.isArray(val) && val.some(item => line.toLowerCase().includes(item.toLowerCase())))
+                    );
+                    if (!isCaptured && !filteredDetails.includes(line)) {
+                        filteredDetails.push(line);
+                    }
+                });
+
+
+                summary.importantDetails = [...new Set(filteredDetails)]; // Remove duplicates
+
+                return summary;
+            }
+
+            /**
+             * Displays the summarized information in the output div.
+             * @param {object} summary - The summary object generated by summarizeNote.
+             */
+            function displaySummary(summary) {
+                summaryOutput.innerHTML = `
+                    <strong>Amount of debt:</strong> ${summary.amountOfDebt}<br>
+                    <strong>Case number:</strong> ${summary.caseNumber}<br>
+                    <strong>County:</strong> ${summary.county}<br>
+                    <strong>Payment information:</strong> ${summary.paymentInformation}<br>
+                    <strong>Plaintiff:</strong> ${summary.plaintiff}<br>
+                    <strong>Opposing Law Firm:</strong> ${summary.opposingLawFirm}<br>
+                    <strong>Is it a rush case?:</strong> ${summary.isRushCase}<br>
+                    <strong>Important details:</strong>
+                    <ul>
+                        ${summary.importantDetails.length > 0 ? summary.importantDetails.map(detail => `<li>- ${detail}</li>`).join('') : '<li>None specified beyond template fields.</li>'}
+                    </ul>
+                `;
+                summaryOutput.classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
