@@ -164,7 +164,7 @@ will look into lp first"></textarea>
 
 
                 // --- Case number ---
-                const caseNumberMatch = note.match(/Case#(\S+)/i);
+                const caseNumberMatch = note.match(/Case(?: Number|#)(\S+)/i);
                 if (caseNumberMatch) {
                     summary.caseNumber = caseNumberMatch[1];
                     // Infer county from case number suffix like /LA
